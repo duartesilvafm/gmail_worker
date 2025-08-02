@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Email directory
+emails/*
+
 # C extensions
 *.so
 
