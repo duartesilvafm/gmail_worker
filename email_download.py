@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from modules import email_parser as em
 from dotenv import load_dotenv
+from langchain.schema import Document
 
 # get scopes and credentials
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -61,11 +62,15 @@ for message in messages:
     if not os.path.exists("emails"):
         os.makedirs("emails")
 
-    with open(f"emails/{msg['id']}.md", "w") as f:
-        f.write("### Email ID {}\n\n".format(msg['id']))
-        f.write("**From:** {}\n\n".format(from_sender))
-        f.write("**To:** {}\n\n".format(to_recipient))
-        f.write("**Date:** {}\n\n".format(datetime))
-        f.write("**Subject:** {}\n\n".format(email_subject))
-        f.write("**Body:**\n\n")
-        f.write(md(body))
+    doc = Document(
+        page_content=body,
+        metadata={
+            "from": from_sender,
+            "to": to_recipient,
+            "date": datetime,
+            "subject": email_subject
+        }
+    )
+
+    # write to markdown
+    em.write_document_to_markdown(doc, f"emails/{msg['id']}.md")
