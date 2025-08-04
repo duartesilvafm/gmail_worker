@@ -1,5 +1,8 @@
 import email 
 import base64
+import yaml
+from pathlib import Path
+from langchain.schema import Document
 from bs4 import BeautifulSoup
 
 def html_to_clean_text(html_content):
@@ -12,6 +15,21 @@ def html_to_clean_text(html_content):
     # Extract visible text
     text = soup.get_text(separator=' ', strip=True)
     return text
+
+
+def write_document_to_markdown(doc: Document, output_path: str):
+    # Prepare YAML frontmatter
+    frontmatter = yaml.dump(doc.metadata, sort_keys=False)
+
+    # Combine metadata and body
+    markdown = f"---\n{frontmatter}---\n\n{doc.page_content.strip()}\n"
+
+    # Ensure output directory exists
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to file
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(markdown)
 
 
 def get_email_data(message_id, service):
