@@ -1,84 +1,93 @@
 # imports for langchain, plotly and Chroma
 import os
 import gradio as gr
-from langchain import hub
-from langchain.document_loaders import DirectoryLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from dotenv import load_dotenv
+from modules.tools_llm import tools, handle_tool_call
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_chroma import Chroma 
+from openai import OpenAI
 
-# load emails into directory
-folders = "emails/"
+load_dotenv()
 
-# loader
-loader = DirectoryLoader(folders, glob="**/*.md", loader_cls=TextLoader)
-folder_docs = loader.load()
-
-# text splitter
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000, 
-    chunk_overlap=200,
-    separators=["\n\n", "\n", " ", ""]
-)
-
-chunks = text_splitter.split_documents(folder_docs)
-print(f"Total number of chunks: {len(chunks)}")
+"""
+CREATE RETRIEVAL CHAIN
+"""
 
 # use hugging face embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 db_name = "vector_db"
 
-# if the vector store already exists, delete it
-if os.path.exists(db_name):
-    Chroma(persist_directory=db_name, embedding_function=embeddings).delete_collection()
-
-# Create vectorstore
-vectorstore = Chroma.from_documents(documents=chunks, embedding=embeddings, persist_directory=db_name)
-print(f"Vectorstore created with {vectorstore._collection.count()} documents")
-
-# create chat with Gradio
-llm = HuggingFaceEndpoint(
-    repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
-    task="text-generation",
-    max_new_tokens=512,
-    do_sample=False,
-    repetition_penalty=1.03,
-    provider="auto",  # let Hugging Face choose the best provider for you
+# load vectorstore
+vectorstore = Chroma(
+    persist_directory=db_name, 
+    embedding_function=embeddings
 )
 
-llm = ChatHuggingFace(llm=llm)
+"""CREATE CHAT FUNCTION"""
 
-# the retriever is an abstraction over the VectorStore that will be used during RAG
-retriever = vectorstore.as_retriever()
+# Define the model to use
+MODEL = "openai/gpt-oss-120b:cerebras"
 
-# pull qa system prompt
-retrieval_qa_chat_prompt = hub.pull("langchain-ai/retrieval-qa-chat")
-print(retrieval_qa_chat_prompt)
-
-
-# combine docs
-combine_docs_chain = create_stuff_documents_chain(
-    llm, retrieval_qa_chat_prompt
+# Initialize the OpenAI client
+client = OpenAI(
+    base_url="https://router.huggingface.co/v1",
+    api_key=os.getenv("HF_TOKEN"),
 )
 
-# create a retrieval chain with the LLM and the retriever
-retrieval_chain = create_retrieval_chain(
-    retriever=retriever,
-    combine_docs_chain=combine_docs_chain
-)
+# chat for open ai
+def chat_openai(message, history, vectorstore=vectorstore):
 
-# wrapping that in a function
-def chat(question, history):
-    result = retrieval_chain.invoke(
+    # create a retrieval chain
+    documents = vectorstore.similarity_search(message, k=5)
+
+    # transform the documents into a format that can be used by the model
+    context = []
+    for document in documents:
+        context += document.page_content.replace("\n", " ")
+        print(document.page_content)
+
+    # join into a string
+    context = "\n".join(context)
+
+    # dictionary with messages
+    messages = [
         {
-            "input": question,
-            "chat_history": history
+            "role": "system",
+            "content": 
+                "You are a helpful assistant with access to the user's gmail inbox through a vectorstore."
+                "You also have access to APIs through tools which can create and send emails on the user's behalf."
+                "To reply to the user, you have access to the following context:\n\n" + context
         }
-    )
-    return result["answer"]
+    ]
+    messages += history
+    messages.append({
+        "role": "user",
+        "content": message
+    })
 
-# And in Gradio:
-view = gr.ChatInterface(chat, type="messages").launch(inbrowser=True)
+    # Initial API call with tools
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        tools=tools,
+        tool_choice="auto" # Let the model decide when to call functions
+    )
+
+    # Print the response
+    print(f"Response: {response.choices[0].message.content}")
+    print(f"Tool calls: {response.choices[0].message.tool_calls}")
+
+    # # Check if the response contains tool calls
+    if response.choices[0].message.tool_calls:
+        message = response.choices[0].message
+        response = handle_tool_call(message)
+        messages.append(message)
+        messages.append(response)
+        response = client.chat.completions.create(model=MODEL, messages=messages)
+
+    print(f"Final Response: {type(response.choices[0].message.content)}")
+    return response.choices[0].message.content
+
+
+# bring up a gradio interface
+gr.ChatInterface(fn=chat_openai, type="messages").launch(inbrowser=True, share=True)

@@ -11,4 +11,5 @@ def run_script(script_name):
 
 if __name__ == "__main__":
     run_script("email_download.py")
+    run_script("create_vectorstore.py")
     run_script("rag_chat.py")

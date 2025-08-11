@@ -1,5 +1,5 @@
-# gmail_worker
-Chat application to serve as an assistant with access to your Gmail inbox
+# Gmail-Worker
+Chat application to serve as an assistant with access to your Gmail inbox and able to create and send drafts.
 
 ## Setup Instructions
 
@@ -24,15 +24,18 @@ CLIENT_SECRET=your_google_client_secret
 
 You can obtain these credentials from your Google Cloud project.
 
-### 3. Ollama and Llama 3.2
 
-The app uses [Ollama](https://ollama.com/) for local LLM inference.  
-Install Ollama and pull the Llama 3.2 model specifically:
+### 3. Hugging Face Credentials
 
-```bash
-# Install Ollama (see https://ollama.com/download)
-ollama pull llama3.2
+This application uses Hugging Face services, utilizing the latest open-source model `gpt-oss-120B`.
+To use Hugging Face services, you need an access token.  
+Create a `.env` file in the project root (or add to your existing `.env`) with the following line:
+
 ```
+HF_TOKEN=your_huggingface_token
+```
+
+You can obtain your access token from your [Hugging Face account settings](https://huggingface.co/settings/tokens).
 
 ### 4. Chat UI
 
