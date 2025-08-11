@@ -5,6 +5,7 @@ __pycache__/
 
 # Email directory
 emails/*
+vector_db/*
 
 # C extensions
 *.so
