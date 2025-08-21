@@ -2,8 +2,10 @@
 __pycache__/
 *.py[codz]
 *$py.class
+*.ipynb
 
 # Email directory
+google/*
 emails/*
 vector_db/*
 
